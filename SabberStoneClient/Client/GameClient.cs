@@ -33,12 +33,16 @@ namespace SabberStoneClient.Client
 
         private ClientState _clientState;
 
+        private int _id;
+
+        private string _token;
+
         public ClientState ClientState
         {
             get => _clientState;
             set
             {
-                Console.WriteLine($"changed ClientState[{_clientState}->{value}]");
+                Log(LogLevel.Information, $"changed ClientState[{_clientState}->{value}]");
                 _clientState = value;
             }
         }
@@ -76,6 +80,9 @@ namespace SabberStoneClient.Client
 
             Client.Connected += Connected;
             Client.Disconnected += Disconnected;
+
+            _id = -1;
+            _token = string.Empty;
         }
 
         private void Connected(object sender, Socket e)
@@ -94,17 +101,42 @@ namespace SabberStoneClient.Client
 
         }
 
-        public void RequestHandShake(string accountName)
+        public void RequestStats()
         {
             if (ClientState == ClientState.None)
             {
-                Console.WriteLine("Currently not connected to the server!");
+                Log(LogLevel.Warning, "Can't request stats without connection!");
                 return;
             }
 
             var sendDataPacket = new SendDataPacket()
             {
-                Id = 0,
+                Id = _id,
+                Token = _token,
+                SendData = JsonConvert.SerializeObject(
+                    new SendData
+                    {
+                        MessageType = MessageType.Stats,
+                        MessageData = JsonConvert.SerializeObject(
+                            new Stats())
+                    })
+            };
+
+            Client.Send(sendDataPacket);
+        }
+
+        public void RequestHandShake(string accountName)
+        {
+            if (ClientState != ClientState.Connected)
+            {
+                Log(LogLevel.Warning, "Wrong client state to request a handshake!");
+                return;
+            }
+
+            var sendDataPacket = new SendDataPacket()
+            {
+                Id = _id,
+                Token = _token,
                 SendData = JsonConvert.SerializeObject(
                     new SendData
                     {
@@ -119,6 +151,74 @@ namespace SabberStoneClient.Client
 
             ClientState = ClientState.HandShake;
             Client.Send(sendDataPacket);
+        }
+
+        public void RequestGame()
+        {
+            if (ClientState != ClientState.Registred)
+            {
+                Log(LogLevel.Warning, "Wrong client state to request a game!");
+                return;
+            }
+
+            var sendDataPacket = new SendDataPacket()
+            {
+                Id = _id,
+                Token = _token,
+                SendData = JsonConvert.SerializeObject(
+                    new SendData
+                    {
+                        MessageType = MessageType.Game,
+                        MessageData = JsonConvert.SerializeObject(
+                            new Game
+                            {
+                                GameType = GameType.Normal
+                            })
+                    })
+            };
+
+            Client.Send(sendDataPacket);
+        }
+
+
+        internal void ProcessResponse(Response response)
+        {
+            if (response.RequestState != RequestState.Success)
+            {
+                Log(LogLevel.Warning, $"Request[{response.ResponseType}]: failed! ");
+                return;
+            }
+
+            switch (response.ResponseType)
+            {
+                case ResponseType.HandShake:
+                        ClientState = ClientState.Registred;
+                        var handShakeResponse = JsonConvert.DeserializeObject<HandShakeResponse>(response.ResponseData);
+                        _id = handShakeResponse.Id;
+                        _token = handShakeResponse.Token;
+                    break;
+
+                case ResponseType.Stats:
+                        var statsResponse = JsonConvert.DeserializeObject<StatsResponse>(response.ResponseData);
+                        statsResponse.UserInfos.ForEach(p => Log(LogLevel.Information, $" -> {p.AccountName}[{p.Id}]: {p.UserState}"));
+                    break;
+
+                case ResponseType.Game:
+                    var gameResponse = JsonConvert.DeserializeObject<GameResponse>(response.ResponseData);
+                    ClientState = ClientState.Queued;
+                    break;
+
+                case ResponseType.None:
+                    break;
+
+                default:
+                    break;
+            }
+        }
+
+        public void Log(LogLevel logLevel, string message)
+        {
+            Console.WriteLine($"CLIENT[{logLevel}]: {message}");
         }
     }
 }

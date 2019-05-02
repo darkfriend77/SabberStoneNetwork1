@@ -17,6 +17,13 @@ namespace SabberStoneClient
             GameClient.Instance.RequestHandShake("Player1");
 
             Thread.Sleep(5000);
+
+            GameClient.Instance.RequestStats();
+
+            Thread.Sleep(5000);
+
+            Console.ReadKey();
+
         }
     }
 }

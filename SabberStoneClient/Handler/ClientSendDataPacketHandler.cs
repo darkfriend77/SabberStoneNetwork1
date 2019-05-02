@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Networker.Common;
 using Networker.Common.Abstractions;
 using Newtonsoft.Json;
+using SabberStoneClient.Client;
 using SabberStoneCommon.Contract;
 
 namespace SabberStoneClient.Handler
@@ -19,8 +20,19 @@ namespace SabberStoneClient.Handler
         public override async Task Process(SendDataPacket packet, IPacketContext packetContext)
         {
             SendData sendData = JsonConvert.DeserializeObject<SendData>(packet.SendData);
-            _logger.LogDebug($"Message[Id:{packet.Id} SendData:{sendData.MessageType}]");
 
+            switch (sendData.MessageType)
+            {
+                case MessageType.Response:
+                    var response = JsonConvert.DeserializeObject<Response>(sendData.MessageData);
+                    GameClient.Instance.Log(LogLevel.Information, $"Message[{sendData.MessageType}]: {response.ResponseType} => {response.RequestState}");
+                    GameClient.Instance.ProcessResponse(response);
+                    break;
+
+                default:
+                    GameClient.Instance.Log(LogLevel.Error, $"Not implemented {sendData.MessageType}!");
+                    break;
+            }
         }
     }
 }
