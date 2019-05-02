@@ -21,20 +21,24 @@ namespace SabberStoneServer.Handler
         public override async Task Process(SendDataPacket packet, IPacketContext packetContext)
         {
             SendData sendData = JsonConvert.DeserializeObject<SendData>(packet.SendData);
-            _logger.LogDebug($"Id:{packet.Id} SendData:{packet.SendData}");
+            GameServer.Instance.Log(LogLevel.Information, $"Message[{sendData.MessageType}]: received! ({packet.Id})");
 
             switch (sendData.MessageType)
             {
                 case MessageType.HandShake:
                     packetContext.Sender.Send(GameServer.Instance.ResponseHandShake(sendData, packetContext));
                     break;
-
-                case MessageType.None:
-                case MessageType.Response:
+                case MessageType.Stats:
+                    packetContext.Sender.Send(GameServer.Instance.ResponseStats(sendData, packetContext));
+                    break;
+                case MessageType.Game:
+                    packetContext.Sender.Send(GameServer.Instance.ResponseGame(packet.Id, packet.Token, sendData, packetContext));
+                    break;
                 default:
-                    packetContext.Sender.Send(new SendDataPacket()
+                    packetContext.Sender.Send(new SendDataPacket
                     {
                         Id = 0,
+                        Token = "",
                         SendData = JsonConvert.SerializeObject(DefaultAnswer)
                     });
                     break;
